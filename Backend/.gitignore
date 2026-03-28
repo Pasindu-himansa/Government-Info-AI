@@ -1,0 +1,6 @@
+node_modules/
+chroma_store/
+__pycache__/
+*.pyc
+.env
+uploads/
