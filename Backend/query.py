@@ -3,43 +3,52 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 import ollama
 
-def query_documents(question):
+def query_documents(question, language="en"):
     print(f"\nQuestion: {question}")
     print("-" * 50)
 
-    # 1. Load embeddings
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
 
-    # 2. Connect to ChromaDB
     vectorstore = Chroma(
         collection_name="gov_documents",
         embedding_function=embeddings,
         persist_directory="./chroma_store"
     )
 
-    # 3. Search for relevant chunks
     results = vectorstore.similarity_search(question, k=5)
 
     if not results:
-        print("No relevant documents found.")
-        print("Please contact the relevant government department.")
+        if language == "si":
+            print("Answer: අදාළ තොරතුරු සොයා ගැනීමට නොහැකි විය. කරුණාකර අදාළ රජයේ දෙපාර්තමේන්තුව අමතන්න.")
+        elif language == "ta":
+            print("Answer: தொடர்புடைய தகவல்களை கண்டுபிடிக்க முடியவில்லை. தயவுசெய்து அந்தந்த அரசு திணைக்களத்தை தொடர்பு கொள்ளுங்கள்.")
+        else:
+            print("Answer: No relevant documents found. Please contact the relevant government department.")
+        print("Sources found: 0 relevant sections")
         return
 
-    # 4. Build context from results
     context = "\n\n".join([doc.page_content for doc in results])
 
-    # 5. Ask Ollama (free local AI)
+    language_instructions = {
+        "si": "Respond ONLY in Sinhala language (සිංහල). Do not use English in your response.",
+        "ta": "Respond ONLY in Tamil language (தமிழ்). Do not use English in your response.",
+        "en": "Respond in English."
+    }
+
+    lang_instruction = language_instructions.get(language, language_instructions["en"])
+
     response = ollama.chat(
         model="llama3.2",
         messages=[
             {
                 "role": "system",
-                "content": """You are a helpful Sri Lankan government information assistant.
+                "content": f"""You are a helpful Sri Lankan government information assistant.
 Answer the question using ONLY the provided document context.
 Always mention which law or regulation your answer comes from.
-If the answer is not in the context, say 'I could not find this information in the available documents.'"""
+{lang_instruction}
+If the answer is not in the context, say so clearly in the same language."""
             },
             {
                 "role": "user",
@@ -53,6 +62,7 @@ If the answer is not in the context, say 'I could not find this information in t
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python query.py \"your question here\"")
+        print("Usage: python query.py \"your question here\" [language]")
     else:
-        query_documents(" ".join(sys.argv[1:]))
+        lang = sys.argv[2] if len(sys.argv) > 2 else "en"
+        query_documents(" ".join(sys.argv[1:-1]) if len(sys.argv) > 2 else " ".join(sys.argv[1:]), lang)
